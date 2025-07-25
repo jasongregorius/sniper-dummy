@@ -1,0 +1,163 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap@4.4.1/dist/css/bootstrap.min.css" integrity="sha384-Vkoo8x4CGsO3+Hhxv8T/Q5PaXtkKtu6ug5TOeNV6gBiFeWPGFN9MuhOf23Q9Ifjh" crossorigin="anonymous">
+    <script src="https://code.jquery.com/jquery-3.4.1.slim.min.js" integrity="sha384-J6qa4849blE2+poT4WnyKhv5vZF5SrPo0iEjwBvKU7imGFAV0wwj1yYfoRSJoZ+n" crossorigin="anonymous"></script>
+<script src="https://cdn.jsdelivr.net/npm/popper.js@1.16.0/dist/umd/popper.min.js" integrity="sha384-Q6E9RHvbIyZFJoft+2mJbHaEWldlvI9IOYy5n3zV9zzTtmI3UksdQRVvoxMfooAo" crossorigin="anonymous"></script>
+<script src="https://cdn.jsdelivr.net/npm/bootstrap@4.4.1/dist/js/bootstrap.min.js" integrity="sha384-wfSDF2E50Y2D1uUdj0O3uMBJnjuUD4Ih7YwaYd1iqfktj0Uod8GCExl3Og8ifwB6" crossorigin="anonymous"></script>
+    <title>Plate Number OCR</title>
+    <style>
+        .row {
+            display: flex;
+        }
+        .col-6 {
+            display: flex;
+            flex-direction: column;
+        }
+        h4 {
+        text-align: center;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+      <div class="row">
+        <nav class="navbar navbar-expand-lg navbar-light bg-light">
+        <a class="navbar-brand" href="#">Navbar</a>
+        <button class="navbar-toggler" type="button" data-toggle="collapse" data-target="#navbarNavAltMarkup" aria-controls="navbarNavAltMarkup" aria-expanded="false" aria-label="Toggle navigation">
+          <span class="navbar-toggler-icon"></span>
+        </button>
+        <div class="collapse navbar-collapse" id="navbarNavAltMarkup">
+          <div class="navbar-nav">
+            <a class="nav-item nav-link active" href="http://172.20.10.2:5000/">Home <span class="sr-only">(current)</span></a>
+            <a class="nav-item nav-link" href="http://172.20.10.2:5000/control">Control</a>
+          </div>
+        </div>
+        </nav>
+      </div>
+    <div class="row">
+        <div class="col-6">
+            <h4>Camera</h4>
+            <div><img src="{{ url_for('video_feed') }}" style="width: 100%; height: auto;"></div>
+            <table class="table table-striped" id="plate-table">
+                <thead>
+                    <tr>
+                    <th scope="col">Image</th>
+                    <th scope="col">Plate Number</th>
+                    <th scope="col">Timestamp</th>
+                    </tr>
+                </thead>
+                <tbody id="plate-table-body"></tbody>
+            </table>
+
+        </div>
+        <div class="col-6">
+            <h4>Results</h4>
+            <div class="container mt-4">
+            <div id="results" class="row gy-4"></div>
+            </div>
+        </div>
+        </div>
+    </div>
+
+    <script>
+  const displayed = new Set();
+
+  async function fetchResults() {
+    const res = await fetch("/results");
+    const data = await res.json();
+    const resultsDiv = document.getElementById("results");
+
+    data.forEach(item => {
+      if (displayed.has(item.image_base64)) return;
+      displayed.add(item.image_base64);
+
+      const col = document.createElement("div");
+      col.className = "col-md-4"; // 3 per row on medium+ screens
+
+      const card = document.createElement("div");
+      card.className = "card border-0 shadow-sm rounded-4 p-3 h-100";
+
+      const conf = document.createElement("p");
+      conf.innerHTML = `<strong>Confidence:</strong> ${item.confidence}`;
+
+      const ocr = document.createElement("p");
+      ocr.innerHTML = `<strong>${item.ocr}</strong>`;
+      
+      const coor = document.createElement("p");
+      coor.innerHTML = `<strong>${item.coor}</strong>`;
+
+      const img = document.createElement("img");
+      img.className = "img-fluid rounded mb-2";
+      img.src = `data:image/jpeg;base64,${item.image_base64}`;
+      img.alt = "Detected result";
+
+      card.append(img, conf, ocr, coor);
+      col.appendChild(card);
+      resultsDiv.insertBefore(col, resultsDiv.firstChild);
+
+      const allCards = resultsDiv.querySelectorAll('.col-md-4');
+      if (allCards.length > 6) {
+        for (let i = allCards.length - 1; i >= 6; i--) {
+          resultsDiv.removeChild(allCards[i]);
+        }
+      }
+
+    });
+  }
+
+  setInterval(fetchResults, 2000);
+</script>
+
+<script>
+  async function fetchPlateData() {
+    try {
+      const response = await fetch('http://sniper-ocr-prod-wbebaohduc.ap-southeast-5.fcapp.run/extracted');
+      if (!response.ok) throw new Error('Network response was not ok');
+
+      const plates = await response.json();
+      const tableBody = document.getElementById('plate-table-body');
+
+      tableBody.innerHTML = '';
+
+      plates.forEach(plate => {
+        if (!plate.extracted_plate) return;
+
+        const row = document.createElement('tr');
+
+        // Image column
+        const imgCell = document.createElement('td');
+        const img = document.createElement('img');
+        img.src = `data:image/jpeg;base64,${plate.image_base64}`;
+        img.alt = "Plate";
+        img.style.width = "100px"; // adjust as needed
+        img.style.borderRadius = "6px";
+        imgCell.appendChild(img);
+
+        // Plate number column
+        const plateCell = document.createElement('td');
+        plateCell.textContent = plate.extracted_plate;
+
+        // Timestamp column
+        const timestampCell = document.createElement('td');
+        timestampCell.textContent = plate.processed_at;
+
+        row.appendChild(imgCell);
+        row.appendChild(plateCell);
+        row.appendChild(timestampCell);
+        tableBody.appendChild(row);
+      });
+    } catch (error) {
+      console.error('Error fetching plate data:', error);
+    }
+  }
+
+  fetchPlateData();
+  setInterval(fetchPlateData, 3000);
+</script>
+
+
+
+    
+</body>
+</html>

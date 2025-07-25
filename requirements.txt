@@ -1,0 +1,6 @@
+flask
+opencv-python
+aiohttp
+pyserial
+picamera2
+ultralytics
